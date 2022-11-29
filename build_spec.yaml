@@ -48,8 +48,6 @@ steps:
           x=$(( $x + 1 ))
           node_status=$(oci ce node-pool list --compartment-id=${COMPARTMENT_ID}  |jq -r '.data[] | {"lifecycle-state","name"} | select( .name == "extra-node-pool") ' | jq -r '."lifecycle-state"')
           echo "Current status: $node_status, waiting to become : ACTIVE"
-          echo "Forcing ACTIVE"
-          node_status="ACTIVE"
           sleep 10
         done
 
