@@ -1,0 +1,71 @@
+version: 0.1
+component: build
+timeoutInSeconds: 6000
+runAs: root
+shell: bash
+env:
+  # these are local variables to the build config
+  variables:
+    key: "value"
+  # the value of a vaultVariable is the secret-id (in OCI ID format) stored in the OCI Vault service
+  # you can then access the value of that secret in your build_spec.yaml commands
+  vaultVariables:
+    HELM_REPO_USER: "${VAULT_HELM_REPO_USER}"
+    USER_AUTH_TOKEN: "${VAULT_USER_AUTH_TOKEN}"
+
+  # exportedVariables are made available to use as parameters in sucessor Build Pipeline stages
+  # For this Build to run, the Build Pipeline needs to have a BUILDRUN_HASH parameter set
+  exportedVariables:
+    - BUILDRUN_HASH
+
+steps:
+  - type: Command
+    name: "Export variables"
+    timeoutInSeconds: 40
+    command: |
+      export BUILDRUN_HASH=`echo ${OCI_BUILD_RUN_ID} | rev | cut -c 1-7`
+      echo "BUILDRUN_HASH: " $BUILDRUN_HASH
+    onFailure:
+      - type: Command
+        timeoutInSeconds: 40
+        command: |
+          echo "Handling Failure"
+          echo "Failure successfully handled"
+        timeoutInSeconds: 400
+        runAs: root
+
+  - type: Command
+    timeoutInSeconds: 1200
+    name: "Check nodepool status (may take more than 10min)"
+    command: |
+      yum install jq -y
+      x=1
+      timeout_c=900
+      node_status="NA"      
+      while [[ $x -le $timeout_c && $node_status != "ACTIVE" ]]
+        do
+          echo "Checking node pool status for the $x times"
+          x=$(( $x + 1 ))
+          node_status=$(oci ce node-pool list --compartment-id=${COMPARTMENT_ID}  |jq -r '.data[] | {"lifecycle-state","name"} | select( .name == "extra-node-pool") ' | jq -r '."lifecycle-state"')
+          echo "Current status: $node_status, waiting to become : ACTIVE"
+          echo "Forcing ACTIVE"
+          node_status="ACTIVE"
+          sleep 10
+        done
+
+  - type: Command
+    timeoutInSeconds: 1200
+    name: "Helm Build"
+    command: |
+      mkdir -p airflow
+      cd airflow
+      export BUILDRUN_HASH=${BUILDRUN_HASH}
+      helm repo add apache-airflow https://airflow.apache.org
+      helm repo update
+      helm pull apache-airflow/airflow
+      helm registry login ${HELM_REPO} -u ${HELM_REPO_USER} -p ${USER_AUTH_TOKEN}
+      helm push *.tgz ${HELM_REPO_URL}
+      
+
+      
+      
