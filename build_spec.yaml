@@ -58,9 +58,7 @@ steps:
       mkdir -p airflow
       cd airflow
       export BUILDRUN_HASH=${BUILDRUN_HASH}
-      helm repo add apache-airflow https://airflow.apache.org
-      helm repo update
-      helm pull apache-airflow/airflow
+      wget https://github.com/airflow-helm/charts/releases/download/airflow-8.6.1/airflow-8.6.1.tgz
       helm registry login ${HELM_REPO} -u ${HELM_REPO_USER} -p ${USER_AUTH_TOKEN}
       helm push *.tgz ${HELM_REPO_URL}
       
